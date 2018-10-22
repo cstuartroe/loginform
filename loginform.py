@@ -70,13 +70,14 @@ def submit_value(form):
     else:
         return []
 
+# locate form by ID and fill in preset input values, but leave it up to scraper to fill other fields
 def fill_form_by_id(url, body, form_id):
     doc = html.document_fromstring(body, base_url=url)
     form = doc.xpath('//*[@id="%s"]' % form_id)[0]
     form_values = form.form_values() + submit_value(form)
     return form_values, form.action or form.base_url, form.method
 
-# pick login form by ID
+# locate form by ID, but still use heuristics to guess username and password fields
 def fill_login_form_by_id(url, body, username, password, form_id):
     doc = html.document_fromstring(body, base_url=url)
     form = doc.xpath('//*[@id="%s"]' % form_id)[0] 
@@ -86,7 +87,7 @@ def fill_login_form_by_id(url, body, username, password, form_id):
     form_values = form.form_values() + submit_value(form)
     return form_values, form.action or form.base_url, form.method
 
-
+# use heuristics to both guess the correct form and guess the username and password fields
 def fill_login_form(url, body, username, password):
     doc = html.document_fromstring(body, base_url=url)
     form = _pick_form(doc.xpath('//form'))
@@ -101,7 +102,7 @@ def main():
     ap = ArgumentParser()
     ap.add_argument('-u', '--username', default='username')
     ap.add_argument('-p', '--password', default='secret')
-    ap.add_argument('-i', '--form_id',  default="css-login-form")
+    ap.add_argument('-i', '--form_id',  default=None)
     ap.add_argument('url')
     args = ap.parse_args()
 
@@ -111,7 +112,12 @@ def main():
         print('requests library is required to use loginform as a tool')
 
     r = requests.get(args.url)
-    values, action, method = fill_login_form_by_id(args.url, r.text, args.username, args.password, args.form_id)
+
+    if args.form_id is None:
+        values, action, method = fill_login_form(args.url, r.text, args.username, args.password)
+    else:
+        values, action, method = fill_login_form_by_id(args.url, r.text, args.username, args.password, args.form_id)
+    
     print(u'url: {0}\nmethod: {1}\npayload:'.format(action, method))
     for k, v in values:
         print(u'- {0}: {1}'.format(k, v))
