@@ -4,7 +4,6 @@ from argparse import ArgumentParser
 from collections import defaultdict
 from lxml import html
 
-
 __version__ = '1.2.0'
 
 
@@ -36,7 +35,6 @@ def _form_score(form):
 
     return score
 
-
 def _pick_form(forms):
     """Return the form most likely to be a login form"""
     return sorted(forms, key=_form_score, reverse=True)[0]
@@ -50,6 +48,7 @@ def _pick_fields(form):
             continue
 
         type_ = x.type
+        print(type_)
         if type_ == 'password' and passfield is None:
             passfield = x.name
         elif type_ == 'email' and emailfield is None:
@@ -71,6 +70,22 @@ def submit_value(form):
     else:
         return []
 
+def fill_form_by_id(url, body, form_id):
+    doc = html.document_fromstring(body, base_url=url)
+    form = doc.xpath('//*[@id="%s"]' % form_id)[0]
+    form_values = form.form_values() + submit_value(form)
+    return form_values, form.action or form.base_url, form.method
+
+# pick login form by ID
+def fill_login_form_by_id(url, body, username, password, form_id):
+    doc = html.document_fromstring(body, base_url=url)
+    form = doc.xpath('//*[@id="%s"]' % form_id)[0] 
+    userfield, passfield = _pick_fields(form)
+    form.fields[userfield] = username
+    form.fields[passfield] = password
+    form_values = form.form_values() + submit_value(form)
+    return form_values, form.action or form.base_url, form.method
+
 
 def fill_login_form(url, body, username, password):
     doc = html.document_fromstring(body, base_url=url)
@@ -86,6 +101,7 @@ def main():
     ap = ArgumentParser()
     ap.add_argument('-u', '--username', default='username')
     ap.add_argument('-p', '--password', default='secret')
+    ap.add_argument('-i', '--form_id',  default="css-login-form")
     ap.add_argument('url')
     args = ap.parse_args()
 
@@ -95,7 +111,7 @@ def main():
         print('requests library is required to use loginform as a tool')
 
     r = requests.get(args.url)
-    values, action, method = fill_login_form(args.url, r.text, args.username, args.password)
+    values, action, method = fill_login_form_by_id(args.url, r.text, args.username, args.password, args.form_id)
     print(u'url: {0}\nmethod: {1}\npayload:'.format(action, method))
     for k, v in values:
         print(u'- {0}: {1}'.format(k, v))
